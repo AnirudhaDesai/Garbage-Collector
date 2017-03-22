@@ -34,9 +34,9 @@ int main()
     if (i == 10000) {
       p = ptr;
       ptr[0] = 'Y';
-    }
-    cout << i << " -- " << (size_t) ptr << endl;
-  }
+    } 
+  //  cout << i << " -- " << (size_t) ptr << endl;
+  } 
   cout << **p1 << endl; // should be 12
   cout << p[0] << endl; // should be Y
   cout << (char *) (q - 4) << endl;

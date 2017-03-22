@@ -31,8 +31,10 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
           object = (Header *)ptr;
        } 
      // object->requestedSize = sz;
-     // object->allocatedSize = roundUpSize;
-     // allocated+=roundUpSize;
+     //object->allocatedSize = roundUpSize;
+       object->setCookie();
+       object->setAllocatedSize(roundUpSize);
+       allocated+=roundUpSize;
      // requested+=sz;
      /* if(roundUpSize>=maxAllocated)
         maxAllocated=roundUpSize;
@@ -48,26 +50,67 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
       heapLock.unlock();
       return (object+1); 
   }
-  return NULL;
+  //return NULL;
   return nullptr; // FIX ME
 }
 
 template <class SourceHeap>
-GCMalloc<SourceHeap>::GCMalloc() {
+GCMalloc<SourceHeap>::GCMalloc() 
+  : bytesAllocatedSinceLastGC(0),
+    bytesReclaimedLastGC(0),
+    startHeap(nullptr),
+    endHeap(nullptr),
+    objectsAllocated(0),
+    allocated(0),
+    allocatedObjects(nullptr)
+     {
+
+    for (auto& f : freedObjects) {
+      f = nullptr;
+    }
   }
-  
+
+template <class SourceHeap>
+void  GCMalloc<SourceHeap>::privateFree(void *ptr){
+
+  if (ptr != NULL)
+  {   
+    Header *object = (Header *)(ptr) - 1; // Redirect the pointer to header
+    int classIndex =  getSizeClass(object->getAllocatedSize());
+    heapLock.lock();
+    if (object->prevObject!=NULL)
+      object->prevObject->nextObject = object->nextObject;
+    if (object->nextObject!=NULL)
+      object->nextObject->prevObject = object->prevObject;
+    object->nextObject = NULL;
+    if (object==allocatedObjects) //Last object in allocatedObjects to be freed
+      allocatedObjects=allocatedObjects->prevObject; 
+    object->prevObject=freedObjects[classIndex];
+    if (freedObjects[classIndex]!=NULL) 
+      freedObjects[classIndex]->nextObject=object;
+    freedObjects[classIndex]=object; 
+    
+    allocated-=object->getAllocatedSize(); //  Decrement Allocated size 
+    heapLock.unlock();
+  } 
+  return;
+  }
 
 template <class SourceHeap>
 size_t GCMalloc<SourceHeap>::getSize(void * p) {
-  return 0; // FIX ME
+  if (p != NULL)
+  {
+    Header *object = (Header *) p - 1;
+    return object->getAllocatedSize();
+  }
+  return 0;
 }
 
 // number of bytes currently allocated  
 template <class SourceHeap>
 size_t GCMalloc<SourceHeap>::bytesAllocated() {
-  return 0; // FIX ME
+  return allocated; // FIX ME
 }
-
 
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::walk(const std::function< void(Header *) >& f) {
@@ -76,11 +119,27 @@ void GCMalloc<SourceHeap>::walk(const std::function< void(Header *) >& f) {
 
 template <class SourceHeap>
 size_t GCMalloc<SourceHeap>::getSizeFromClass(int index) {
-  return 0; // FIX ME
+   long int switchIndex = Threshold/Base;  
+  if (index < switchIndex)
+  {
+    return (size_t)(Base*(index+1));
+  }
+  else if(index<=(switchIndex+14) && index>=switchIndex)
+  {
+    return (size_t)(pow(2,(index-switchIndex)+15));
+  }
+  return 0; 
 }
 
 
 template <class SourceHeap>
-int GCMalloc<SourceHeap>::getSizeClass(size_t sz) {
-  return 0; // FIX ME
+int constexpr GCMalloc<SourceHeap>::getSizeClass(size_t sz) {
+  if (sz<=Threshold)
+  {
+    return (int) (ceil((sz/(float)Base)) - 1);
+  }  
+  else 
+  {
+   return (int)(ceil(log2(sz))+(Threshold/Base)-15);
+  }
 }
