@@ -5,9 +5,18 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
 
   if (sz<=0)
       return NULL;
+
+
     Header *object;
     int classIndex = getSizeClass(sz); //Get the Class Index
     size_t roundUpSize = getSizeFromClass(classIndex); // Allocated Size 
+
+    /* Check if GC needs to be triggered */
+    if (triggerGC(roundUpSize) && !(inGC))
+    {
+      gc();
+    } 
+
     if (roundUpSize!=0)
     {
       heapLock.lock();
@@ -29,13 +38,14 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
             return NULL;
           }
           object = (Header *)ptr;
-          endHeap = object;
+          endHeap = (void *)((char *)(SourceHeap::getStart())+ SourceHeap::getSize() - SourceHeap::getRemaining());
        } 
      // object->requestedSize = sz;
      //object->allocatedSize = roundUpSize;
        object->setCookie();
        object->setAllocatedSize(roundUpSize);
        allocated+=roundUpSize;
+       bytesAllocatedSinceLastGC+= roundUpSize;
 
      // requested+=sz;
      /* if(roundUpSize>=maxAllocated)
@@ -135,6 +145,7 @@ GCMalloc<SourceHeap>::GCMalloc()
   : bytesAllocatedSinceLastGC(0),
     bytesReclaimedLastGC(0),
     startHeap(SourceHeap::getStart()),
+    endHeap((void *)((char *)(SourceHeap::getStart())+ SourceHeap::getSize() - SourceHeap::getRemaining())),
     objectsAllocated(0),
     allocated(0),
     allocatedObjects(nullptr)
@@ -152,31 +163,38 @@ void GCMalloc<SourceHeap>::scan(void * start, void * end) {
 template <class SourceHeap>
 bool GCMalloc<SourceHeap>::triggerGC(size_t szRequested) {
 
-
-  }
+  if (bytesAllocatedSinceLastGC + szRequested > 1024)
+      return true;
+  return false;
+}
 
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::gc() {
-  
+  inGC = true;
+  mark();
+  sweep();
+  bytesAllocatedSinceLastGC = 0;
+  inGC = false;
 
   }
 
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::mark() {
-
-
-
+  sp.walkStack([this] (void *p) {markReachable(p);});
+  sp.walkGlobals([this] (void *p) {markReachable(p);});
+  sp.walkRegisters([this] (void *p) {markReachable(p);});
 
   }
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::markReachable(void * ptr) {
+    
 
   }
 
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::sweep() {
 
-  
+
   }
 
 template <class SourceHeap>
