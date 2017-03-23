@@ -29,12 +29,14 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
             return NULL;
           }
           object = (Header *)ptr;
+          endHeap = object;
        } 
      // object->requestedSize = sz;
      //object->allocatedSize = roundUpSize;
        object->setCookie();
        object->setAllocatedSize(roundUpSize);
        allocated+=roundUpSize;
+
      // requested+=sz;
      /* if(roundUpSize>=maxAllocated)
         maxAllocated=roundUpSize;
@@ -53,22 +55,6 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
   //return NULL;
   return nullptr; // FIX ME
 }
-
-template <class SourceHeap>
-GCMalloc<SourceHeap>::GCMalloc() 
-  : bytesAllocatedSinceLastGC(0),
-    bytesReclaimedLastGC(0),
-    startHeap(nullptr),
-    endHeap(nullptr),
-    objectsAllocated(0),
-    allocated(0),
-    allocatedObjects(nullptr)
-     {
-
-    for (auto& f : freedObjects) {
-      f = nullptr;
-    }
-  }
 
 template <class SourceHeap>
 void  GCMalloc<SourceHeap>::privateFree(void *ptr){
@@ -143,3 +129,59 @@ int constexpr GCMalloc<SourceHeap>::getSizeClass(size_t sz) {
    return (int)(ceil(log2(sz))+(Threshold/Base)-15);
   }
 }
+
+template <class SourceHeap>
+GCMalloc<SourceHeap>::GCMalloc() 
+  : bytesAllocatedSinceLastGC(0),
+    bytesReclaimedLastGC(0),
+    startHeap(SourceHeap::getStart()),
+    objectsAllocated(0),
+    allocated(0),
+    allocatedObjects(nullptr)
+     {
+
+    for (auto& f : freedObjects) {
+      f = nullptr;
+    }
+  }
+
+template <class SourceHeap>
+void GCMalloc<SourceHeap>::scan(void * start, void * end) {
+  }
+
+template <class SourceHeap>
+bool GCMalloc<SourceHeap>::triggerGC(size_t szRequested) {
+
+
+  }
+
+template <class SourceHeap>
+void GCMalloc<SourceHeap>::gc() {
+  
+
+  }
+
+template <class SourceHeap>
+void GCMalloc<SourceHeap>::mark() {
+
+
+
+
+  }
+template <class SourceHeap>
+void GCMalloc<SourceHeap>::markReachable(void * ptr) {
+
+  }
+
+template <class SourceHeap>
+void GCMalloc<SourceHeap>::sweep() {
+
+  
+  }
+
+template <class SourceHeap>
+bool GCMalloc<SourceHeap>::isPointer(void * p) {
+    if(p>=startHeap && p<=endHeap)
+      return true;
+    return false;
+  }
