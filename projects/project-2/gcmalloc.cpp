@@ -14,7 +14,9 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
     /* Check if GC needs to be triggered */
     if (triggerGC(roundUpSize) && !(inGC))
     {
+      
       gc();
+      
     } 
 
     if (roundUpSize!=0)
@@ -31,6 +33,7 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
        else
        {
           void * ptr = SourceHeap::malloc(roundUpSize+sizeof(Header));
+          //printf("Malloc on %p\n",ptr );
           if(ptr==NULL)
           {
             // HeapRemaining is zero
@@ -40,18 +43,14 @@ void * GCMalloc<SourceHeap>::malloc(size_t sz) {
           object = (Header *)ptr;
           endHeap = (void *)((char *)(SourceHeap::getStart())+ SourceHeap::getSize() - SourceHeap::getRemaining());
        } 
-     // object->requestedSize = sz;
-     //object->allocatedSize = roundUpSize;
+     
        object->setCookie();
        object->setAllocatedSize(roundUpSize);
        allocated+=roundUpSize;
+       objectsAllocated++;
        bytesAllocatedSinceLastGC+= roundUpSize;
 
-     // requested+=sz;
-     /* if(roundUpSize>=maxAllocated)
-        maxAllocated=roundUpSize;
-      if(sz>=maxRequested)
-        maxRequested=sz; */
+     
       /* Add the object to Allocated Objects List*/
       object->nextObject=NULL;
       object->prevObject=allocatedObjects;
@@ -148,7 +147,9 @@ GCMalloc<SourceHeap>::GCMalloc()
     endHeap((void *)((char *)(SourceHeap::getStart())+ SourceHeap::getSize() - SourceHeap::getRemaining())),
     objectsAllocated(0),
     allocated(0),
-    allocatedObjects(nullptr)
+    allocatedObjects(nullptr),
+    initialized(true),
+    nextGC(1024*10)
      {
 
     for (auto& f : freedObjects) {
@@ -158,48 +159,102 @@ GCMalloc<SourceHeap>::GCMalloc()
 
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::scan(void * start, void * end) {
-  }
+    while(start < end)
+    {
+      void ** temp = (void**)start;
+     // printf("Recursing into markReachable\n");
+      markReachable((void*)*temp);
+      start = (void*)((uintptr_t)start+1);
+      //printf("scan called on %p \n", start );
+    }
+  } 
 
 template <class SourceHeap>
 bool GCMalloc<SourceHeap>::triggerGC(size_t szRequested) {
-
-  if (bytesAllocatedSinceLastGC + szRequested > 1024)
+  if((bytesAllocatedSinceLastGC + szRequested)> SourceHeap::getRemaining())
+    return true;
+ /* if (freedObjects[getSizeClass(szRequested)]==NULL)
+    return true; */
+  if ((bytesAllocatedSinceLastGC + szRequested) > nextGC)
       return true;
   return false;
 }
 
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::gc() {
+
   inGC = true;
+  bytesReclaimedLastGC=0;
   mark();
   sweep();
-  bytesAllocatedSinceLastGC = 0;
   inGC = false;
+  bytesAllocatedSinceLastGC = 0;
+  
 
   }
 
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::mark() {
+  //printf("Walking Stack \n");
   sp.walkStack([this] (void *p) {markReachable(p);});
+  //printf("Walking Globals\n");
   sp.walkGlobals([this] (void *p) {markReachable(p);});
+  //printf("Walking Registers\n");
   sp.walkRegisters([this] (void *p) {markReachable(p);});
 
   }
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::markReachable(void * ptr) {
-    
+    if (isPointer(ptr))
+    {
+      /* Find Header using Validate Cookie */
+      Header * object = (Header *) ptr;
+      while(!object->validateCookie())
+      { 
+       // printf(" Object without header %p\n", object);
+        object = (Header *)((uintptr_t)object-1);
+
+      }
+    //  printf(" Object with Header %p \n", object );
+      if(!object->isMarked())
+      {
+        printf("Object marked\n");
+        object->mark();
+        void * ScanStart = (void*)(object + 1);
+        void * ScanEnd =  (void*)(((char *)(object + 1) + object->getAllocatedSize()));
+        scan(ScanStart,ScanEnd);
+      }
+    }
 
   }
 
 template <class SourceHeap>
 void GCMalloc<SourceHeap>::sweep() {
-
+    Header * beginSweep = (Header *)startHeap;
+      printf("Entered Sweep\n");
+    while(beginSweep<endHeap)
+    {
+      printf("Entered while in sweep\n");
+      if(!(beginSweep->isMarked()))
+      {
+        
+        privateFree(beginSweep+1);
+        bytesReclaimedLastGC+= beginSweep->getAllocatedSize();  
+        //printf("privateFree called on %p \n", beginSweep);
+      }
+      else
+      {
+        beginSweep->clear();
+      }
+      beginSweep = (Header *)((char *)(beginSweep+1) + beginSweep->getAllocatedSize());
+    
+    }
 
   }
 
 template <class SourceHeap>
 bool GCMalloc<SourceHeap>::isPointer(void * p) {
-    if(p>=startHeap && p<=endHeap)
+    if(p>=startHeap && p<endHeap)
       return true;
     return false;
   }
