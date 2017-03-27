@@ -10,6 +10,7 @@ extern "C"
   //  void xxfree(void *);
 }
 
+
 int testme;
 
 int main()
@@ -36,8 +37,9 @@ int main()
       ptr[0] = 'Y';
     } 
     cout << i << " -- " << (size_t) ptr << endl;
-  } 
+  }  
   int *p5 = (int *) malloc(80000);
+
   cout << **p1 << endl; // should be 12
   cout << p[0] << endl; // should be Y
   cout << (char *) (q - 4) << endl;
